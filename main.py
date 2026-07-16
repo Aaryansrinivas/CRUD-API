@@ -83,3 +83,21 @@ def delete_task(task_id: int):
             tasks.pop(i)
             return
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+@app.get("/stats", summary="Task statistics")
+def stats():
+    total = len(tasks)
+    done = len([t for t in tasks if t["done"]])
+    return {"total": total, "done": done, "open": total - done}
+
+
+@app.post("/reset", summary="Reset tasks to seed data")
+def reset():
+    global tasks, next_id
+    tasks = [
+        {"id": 1, "title": "Buy milk", "done": False},
+        {"id": 2, "title": "Write README", "done": False},
+        {"id": 3, "title": "Learn FastAPI", "done": True},
+    ]
+    next_id = 4
+    return {"status": "reset"}
