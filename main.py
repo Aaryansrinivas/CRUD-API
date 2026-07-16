@@ -11,6 +11,10 @@ tasks = [
 def root():
     return "default path"
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.get("/tasks")
 def get_tasks():
     return tasks
