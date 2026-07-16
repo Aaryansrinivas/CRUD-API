@@ -1,15 +1,23 @@
-from fastapi import FastAPI ,HTTPException
+from fastapi import FastAPI, HTTPException
 
 app = FastAPI()
 
+# In-memory "database"
 tasks = [
-    {"id":1,"title" : "buy milk","done" : "false"},
-    {"id":2,"title" : "walk the dog","done" : "false"},
-    {"id":3,"title" : "read a book","done" : "true"}
+    {"id": 1, "title": "Buy milk", "done": False},
+    {"id": 2, "title": "Write README", "done": False},
+    {"id": 3, "title": "Learn FastAPI", "done": True},
 ]
+
+next_id = 4
+
 @app.get("/")
 def root():
-    return "default path"
+    return {
+        "name": "Task API",
+        "version": "1.0",
+        "endpoints": ["/tasks"]
+    }
 
 @app.get("/health")
 def health():
@@ -20,8 +28,11 @@ def get_tasks():
     return tasks
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id :int):
+def get_task(task_id: int):
     for task in tasks:
         if task["id"] == task_id:
             return task
-    raise HTTPException(status_code=404, detail=f"{task_id} not found")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Task {task_id} not found"
+    )
