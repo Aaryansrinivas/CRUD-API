@@ -104,26 +104,40 @@ def create_task(task: TaskCreate):
     }
  
  
-@app.put("/tasks/{task_id}", summary="Update a task's title and/or done status")
-def update_task(task_id: int, update: TaskUpdate):
-    for task in tasks:
-        if task["id"] == task_id:
-            if update.title is not None and not update.title.strip():
-                raise HTTPException(status_code=400, detail="Title cannot be empty")
-            if update.title is not None:
-                task["title"] = update.title.strip()
-            if update.done is not None:
-                task["done"] = update.done
-            return task
-    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, task: TaskUpdate):
+
+    cursor = database.connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE tasks
+        SET title=?, done=?
+        WHERE id=?
+        """,
+        (task.title, task.done, task_id)
+    )
+
+    if cursor.rowcount == 0:
+        raise HTTPException(404, "Task not found")
+
+    database.connection.commit()
+
+    return {
+        "id": task_id,
+        "title": task.title,
+        "done": task.done
+    }
+  
  
  
 @app.delete("/tasks/{task_id}", status_code=204, summary="Delete a task")
 def delete_task(task_id: int):
-    for i, task in enumerate(tasks):
-        if task["id"] == task_id:
-            tasks.pop(i)
-            return
+    cursor = database.connection.cursor()
+    cursor.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    database.connection.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(404, "Task not found")
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
 @app.get("/stats", summary="Task statistics")
