@@ -137,7 +137,7 @@ Returns the total number of tasks currently stored in the SQLite database.
 
 
 ```markdown
-![DB Browser Screenshot](dbimage.png)
+(dbimage.png)
 ```
 
 ---
