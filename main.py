@@ -34,22 +34,47 @@ def health():
     return {"status": "ok"}
  
  
-@app.get("/tasks", summary="List all tasks (with optional filters)")
-def get_tasks(done: Optional[bool] = None, search: Optional[str] = None):
-    result = tasks
-    if done is not None:
-        result = [t for t in result if t["done"] == done]
-    if search is not None:
-        result = [t for t in result if search.lower() in t["title"].lower()]
-    return result
+@app.get("/tasks")
+def get_tasks():
+
+    cursor = database.connection.cursor()
+
+    cursor.execute("SELECT * FROM tasks")
+
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "title": row[1],
+            "done": bool(row[2])
+        }
+        for row in rows
+    ]
  
- 
-@app.get("/tasks/{task_id}", summary="Get a single task by id")
+@app.get("/tasks/{task_id}")
 def get_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    cursor = database.connection.cursor()
+
+    cursor.execute(
+        "SELECT * FROM tasks WHERE id=?",
+        (task_id,)
+    )
+
+    row = cursor.fetchone()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found"
+        )
+
+    return {
+        "id": row[0],
+        "title": row[1],
+        "done": bool(row[2])
+    }
  
  
 @app.post("/tasks", status_code=201, summary="Create a new task")
