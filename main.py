@@ -77,15 +77,31 @@ def get_task(task_id: int):
     }
  
  
-@app.post("/tasks", status_code=201, summary="Create a new task")
+@app.post("/tasks", status_code=201)
 def create_task(task: TaskCreate):
-    global next_id
-    if not task.title or not task.title.strip():
-        raise HTTPException(status_code=400, detail="Title is required and cannot be empty")
-    new_task = {"id": next_id, "title": task.title.strip(), "done": False}
-    tasks.append(new_task)
-    next_id += 1
-    return new_task
+
+    if task.title.strip() == "":
+        raise HTTPException(
+            status_code=400,
+            detail="Title required"
+        )
+
+    cursor = database.connection.cursor()
+
+    cursor.execute(
+        "INSERT INTO tasks(title, done) VALUES(?, ?)",
+        (task.title, False)
+    )
+
+    database.connection.commit()
+
+    task_id = cursor.lastrowid
+
+    return {
+        "id": task_id,
+        "title": task.title,
+        "done": False
+    }
  
  
 @app.put("/tasks/{task_id}", summary="Update a task's title and/or done status")
