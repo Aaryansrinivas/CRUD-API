@@ -92,6 +92,12 @@ Open the application:
 - API: http://127.0.0.1:8000
 
 ---
+## Swagger UI
+
+Interactive API documentation generated automatically by FastAPI.
+
+![Swagger UI](swagger-screenshot.png)
+
 
 ## Database
 
@@ -134,11 +140,9 @@ Returns the total number of tasks currently stored in the SQLite database.
 
 ## DB Browser Screenshot
 
+![SQLite Database](dbimage.png)
 
 
-```markdown
-(dbimage.png)
-```
 
 ---
 
