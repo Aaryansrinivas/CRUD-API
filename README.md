@@ -1,188 +1,97 @@
-# CRUD API with SQLite
+# crud API — Postgres in Docker (W3)
 
-A RESTful CRUD API built with **FastAPI** and **SQLite** as part of the **FlyRank Backend Development Track – Week 3**.
+A CRUD Task API whose storage moved from an in-memory list to a real Postgres
+database running in Docker, with the app and database started together via
+`docker compose up`.
 
-This project extends the Week 2 CRUD API by replacing the in-memory task list with a persistent SQLite database.
-
-## Features
-
-- Create a task
-- Get all tasks
-- Get a task by ID
-- Update a task
-- Delete a task
-- Persistent SQLite database
-- Automatic database and table creation
-- Automatic seeding of three sample tasks
-- Interactive Swagger UI
-
----
-
-## Tech Stack
-
-- Python 3
-- FastAPI
-- Uvicorn
-- SQLite (sqlite3)
-
----
-
-## Why SQLite?
-
-SQLite is a lightweight, serverless database that stores all data in a single file (`tasks.db`). It requires no additional setup and provides persistent storage, allowing task data to remain available even after restarting the server.
-
----
-
-## Project Structure
-
-```
-CRUD-API/
-│── main.py
-│── database.py
-│── tasks.db
-│── requirements.txt
-│── README.md
-│── .gitignore
-```
-
----
-
-## Installation
-
-Clone the repository
+## Run it
 
 ```bash
-git clone https://github.com/Aaryansrinivas/CRUD-API.git
-cd CRUD-API
+cp .env.example .env      # adjust values if you want, defaults work as-is
+docker compose up --build
 ```
 
-Create a virtual environment
+Then visit `http://localhost:8000/docs`.
 
-### Windows
+To stop: `Ctrl+C`, then `docker compose down` (add `-v` to also delete the
+volume and wipe data — don't do that if you want to keep testing persistence).
 
-```bash
-python -m venv venv
-venv\Scripts\activate
+## Architecture — why swapping storage only touched one file
+
+```
+routes (main.py)  ->  service (service.py)  ->  repository interface (repository.py)
+                                                        |
+                                        InMemoryTaskRepository   PostgresTaskRepository
 ```
 
-### Linux / macOS
+- `repository.py` defines the contract: `list`, `get`, `create`, `update`, `delete`.
+- `memory_repository.py` and `postgres_repository.py` both implement that exact
+  contract.
+- `service.py` (business rules: title required, etc.) only ever calls methods
+  on the interface — it has no idea whether rows live in a Python list or a
+  Postgres table.
+- `main.py` (HTTP routes) only ever calls the service.
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
+**The only line that changes between memory and Postgres** is in `main.py`:
+
+```python
+REPO_TYPE = os.environ.get("REPO_TYPE", "postgres")
+repository = PostgresTaskRepository() if REPO_TYPE == "postgres" else InMemoryTaskRepository()
 ```
 
-Install dependencies
+Flip `REPO_TYPE=memory` in `.env` and every route, every validation rule, and
+every status code behaves identically — proof that the layering does what
+it's supposed to.
 
-```bash
-pip install -r requirements.txt
-```
+## Environment variables
 
----
+`.env` is gitignored; `.env.example` is committed as the template.
 
-## Run the Application
-
-```bash
-uvicorn main:app --reload
-```
-
-Open the application:
-
-- Swagger UI: http://127.0.0.1:8000/docs
-- API: http://127.0.0.1:8000
-
----
-## Swagger UI
-
-Interactive API documentation generated automatically by FastAPI.
-
-![Swagger UI](swagger-screenshot.png)
-
+| Variable | Meaning |
+|---|---|
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Credentials Postgres itself uses to init |
+| `DATABASE_URL` | Full connection string the app uses; host is `db` (the compose service name), not `localhost` |
+| `REPO_TYPE` | `postgres` (default) or `memory` |
 
 ## Database
 
-The application automatically:
+`sql/init.sql` creates the `tasks` table and seeds 3 rows. It's mounted into
+Postgres's `/docker-entrypoint-initdb.d/`, which Postgres's official image runs
+automatically **only the first time** a container starts against an empty
+data volume. If you edit `init.sql` later, you must `docker compose down -v`
+(drops the volume) to see the change take effect.
 
-- Creates `tasks.db` if it does not exist.
-- Creates the `tasks` table if it does not exist.
-- Seeds three sample tasks only when the table is empty.
-- Preserves all task data after server restarts.
+## Proving persistence
 
-> **Note:** `tasks.db` is listed in `.gitignore`, so every new clone creates its own database automatically.
+1. `docker compose up --build`
+2. Create a task: `curl -X POST http://localhost:8000/tasks -H "Content-Type: application/json" -d '{"title":"Survive a restart"}'`
+3. Confirm it's there: `curl http://localhost:8000/tasks`
+4. Restart everything: `docker compose down` then `docker compose up` (no `-v` — the volume is untouched)
+5. `curl http://localhost:8000/tasks` again — the task from step 2 is still there.
 
----
+This works because `pgdata` is a **named Docker volume**: it lives outside the
+container's writable layer, on the host, and survives the container being
+stopped, removed, and recreated. Only `docker compose down -v` (or deleting
+the volume directly) erases it — which is exactly the boundary between "the
+container restarted" and "I actually asked to wipe my data."
 
-## API Endpoints
+## Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | API information |
-| GET | `/health` | Health check |
-| GET | `/tasks` | Get all tasks |
-| GET | `/tasks/{id}` | Get a task by ID |
-| POST | `/tasks` | Create a task |
-| PUT | `/tasks/{id}` | Update a task |
-| DELETE | `/tasks/{id}` | Delete a task |
+| Method | Path | Description | Success | Errors |
+|---|---|---|---|---|
+| GET | / | API info (shows active storage) | 200 | - |
+| GET | /health | Health check | 200 | - |
+| GET | /tasks | List tasks (`?done=`, `?search=`) | 200 | - |
+| GET | /tasks/{id} | Get one task | 200 | 404 |
+| POST | /tasks | Create a task | 201 | 400 |
+| PUT | /tasks/{id} | Update a task | 200 | 400, 404 |
+| DELETE | /tasks/{id} | Delete a task | 204 | 404 |
 
----
+## Notes
 
-## Example SQL Query
-
-```sql
-SELECT COUNT(*) FROM tasks;
-```
-
-**Result:**
-
-Returns the total number of tasks currently stored in the SQLite database.
-
----
-
-## DB Browser Screenshot
-
-![SQLite Database](dbimage.png)
-
-
-
----
-
-## Sample Response
-
-```json
-[
-  {
-    "id": 1,
-    "title": "Learn FastAPI",
-    "done": false
-  },
-  {
-    "id": 2,
-    "title": "Learn SQLite",
-    "done": false
-  }
-]
-```
-
----
-
-## Requirements
-
-Generate the requirements file:
-
-```bash
-pip freeze > requirements.txt
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Author
-
-**Aaryan Srinivas**
-
-GitHub: https://github.com/Aaryansrinivas
+- The Postgres repository was swapped in without changing `service.py` or
+  any route in `main.py` — only `main.py`'s repository-selection line and the
+  new `postgres_repository.py` / `db.py` files were added.
+- Local (non-Docker) dev: run Postgres via Docker anyway
+  (`docker run -e POSTGRES_PASSWORD=taskpass -p 5432:5432 postgres:16`), set
+  `DATABASE_URL` to use `localhost` instead of `db`, then `uvicorn app.main:app --reload`.
