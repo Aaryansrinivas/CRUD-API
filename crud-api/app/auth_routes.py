@@ -63,4 +63,14 @@ def public_info():
 @router.get("/protected/profile", summary="Read the logged-in user's private profile")
 def profile(authorization: Optional[str] = Header(default=None)):
     token = _extract_token(authorization)
-    return {"message": "Token received (not yet verified)", "token_preview": token[:12] + "..."}
+
+    try:
+        response = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if response is None or response.user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = response.user
+    return {"id": user.id, "email": user.email, "created_at": user.created_at}
