@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Depends,Response
 from typing import Optional
-from app.auth import supabase
+from app.auth import supabase ,get_current_user
 from app.models import SignupRequest, LoginRequest
 
 router = APIRouter()
@@ -61,16 +61,14 @@ def public_info():
 
 
 @router.get("/protected/profile", summary="Read the logged-in user's private profile")
-def profile(authorization: Optional[str] = Header(default=None)):
-    token = _extract_token(authorization)
-
-    try:
-        response = supabase.auth.get_user(token)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    if response is None or response.user is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user = response.user
+def profile(user=Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "created_at": user.created_at}
+
+
+@router.post("/auth/logout", status_code=204, summary="End the user's session")
+def logout(user=Depends(get_current_user)):
+    try:
+        supabase.auth.sign_out()
+    except Exception:
+        pass
+    return Response(status_code=204)

@@ -2,14 +2,14 @@ import os
 from dotenv import load_dotenv
 load_dotenv()  # reads .env into environment variables before anything else runs
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException ,Depends
 from typing import Optional
 
 from app.models import TaskCreate, TaskUpdate
 from app.service import TaskService, NotFoundError, ValidationError
 from app.memory_repository import InMemoryTaskRepository
 from app.postgres_repository import PostgresTaskRepository
-from app.auth import supabase  
+from app.auth import supabase, get_current_user 
 from app.auth_routes import router as auth_router
 
 
@@ -24,6 +24,14 @@ print("Server running and connected to Supabase")
 REPO_TYPE = os.environ.get("REPO_TYPE", "postgres")
 repository = PostgresTaskRepository() if REPO_TYPE == "postgres" else InMemoryTaskRepository()
 service = TaskService(repository)
+
+@app.get(
+    "/protected/dashboard",
+    summary="A second protected route, guarded by the same dependency as /protected/profile",
+)
+def dashboard(user=Depends(get_current_user)):
+    tasks = service.list_tasks()
+    return {"message": f"Welcome back, {user.email}", "task_count": len(tasks)}
 # ----------------------------------------------------------------------------
 
 
