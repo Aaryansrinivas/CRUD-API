@@ -9,8 +9,11 @@ from app.models import TaskCreate, TaskUpdate
 from app.service import TaskService, NotFoundError, ValidationError
 from app.memory_repository import InMemoryTaskRepository
 from app.postgres_repository import PostgresTaskRepository
+from app.auth import supabase  
+
 
 app = FastAPI()
+print("Server running and connected to Supabase")
 
 # --- The one line that decides where data lives ---------------------------
 # REPO_TYPE=postgres (default) -> real, persistent Postgres storage
