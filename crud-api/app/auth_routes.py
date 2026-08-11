@@ -6,7 +6,7 @@ from app.models import SignupRequest, LoginRequest
 router = APIRouter()
 
 
-@router.post("/auth/signup", status_code=201, summary="Create a new user account")
+@router.post("/auth/signup", status_code=201, summary="Create a new user account", tags=["Auth"])
 def signup(payload: SignupRequest):
     if not payload.email or not payload.password:
         raise HTTPException(status_code=400, detail="email and password are required")
