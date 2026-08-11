@@ -1,20 +1,93 @@
-# crud API — Postgres in Docker (W3)
+# crud API — Postgres in Docker + Supabase Auth (W2 A4)
 
 A CRUD Task API whose storage moved from an in-memory list to a real Postgres
-database running in Docker, with the app and database started together via
-`docker compose up`.
+database running in Docker, and now has real user authentication on top:
+sign up, log in, log out, and protected routes guarded by a Supabase-issued
+JSON Web Token (JWT).
+
+We never hash a password or verify a token signature ourselves — Supabase
+(the Identity Provider) does that. Our server's job is to hand credentials to
+Supabase, and to verify the JWT it hands back.
+
+## Setup
+
+1. Create a free project at [supabase.com](https://supabase.com) (no card).
+2. In the Supabase Dashboard, go to **Project Settings → API** and copy your
+   **Project URL** and **anon key** (never the `service_role` key here).
+3. In **Authentication → Sign In / Providers → Email**, turn **Confirm email**
+   off, so a fresh signup can log in immediately in this dev project.
+4. Copy the env template and fill in your Supabase values:
+
+```bash
+cp .env.example .env
+```
+
+```env
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your-anon-key
+```
 
 ## Run it
 
 ```bash
-cp .env.example .env      # adjust values if you want, defaults work as-is
 docker compose up --build
 ```
 
-Then visit `http://localhost:8000/docs`.
+Then visit `http://localhost:8000/docs`. Click **Authorize**, paste an
+`access_token` from `/auth/login`, and try the protected routes right from
+the browser.
 
 To stop: `Ctrl+C`, then `docker compose down` (add `-v` to also delete the
 volume and wipe data — don't do that if you want to keep testing persistence).
+
+### Local (non-Docker) dev
+
+```bash
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+## Auth flow
+
+| Step | Who does it | What happens |
+|---|---|---|
+| 1. Sign up / log in | Client → Supabase | Client sends email + password to Supabase via our `/auth/signup` or `/auth/login` route. |
+| 2. The token | Supabase → Client | Supabase checks the credentials and returns a JWT (access token) + refresh token. |
+| 3. The request | Client → server | Client calls a protected route with `Authorization: Bearer <token>`. |
+| 4. Verification | Server → Supabase | Our `get_current_user` dependency asks Supabase "is this token real?" via `auth.get_user(token)`. If yes, the route runs. |
+
+`app/auth.py` holds the Supabase client and the `get_current_user` dependency
+— the one reusable guard. `app/auth_routes.py` holds the auth/profile routes.
+`app/main.py` just plugs the guard into any route with
+`Depends(get_current_user)`; `/protected/profile` and `/protected/dashboard`
+both use it, with zero duplicated auth code.
+
+### Try it with curl
+
+```bash
+# Sign up
+curl -i -X POST http://localhost:8000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+
+# Log in — copy the access_token from the response
+curl -i -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+
+# Call a protected route
+curl -i http://localhost:8000/protected/profile \
+  -H "Authorization: Bearer <PASTE_ACCESS_TOKEN>"
+
+# Tamper with the token -> 401
+curl -i http://localhost:8000/protected/profile \
+  -H "Authorization: Bearer <PASTE_ACCESS_TOKEN>x"
+
+# Log out (protected)
+curl -i -X POST http://localhost:8000/auth/logout \
+  -H "Authorization: Bearer <PASTE_ACCESS_TOKEN>"
+```
 
 ## Architecture — why swapping storage only touched one file
 
@@ -77,15 +150,21 @@ container restarted" and "I actually asked to wipe my data."
 
 ## Endpoints
 
-| Method | Path | Description | Success | Errors |
-|---|---|---|---|---|
-| GET | / | API info (shows active storage) | 200 | - |
-| GET | /health | Health check | 200 | - |
-| GET | /tasks | List tasks (`?done=`, `?search=`) | 200 | - |
-| GET | /tasks/{id} | Get one task | 200 | 404 |
-| POST | /tasks | Create a task | 201 | 400 |
-| PUT | /tasks/{id} | Update a task | 200 | 400, 404 |
-| DELETE | /tasks/{id} | Delete a task | 204 | 404 |
+| Method | Path | Description | Auth required | Success | Errors |
+|---|---|---|---|---|---|
+| GET | / | API info (shows active storage) | no | 200 | - |
+| GET | /health | Health check | no | 200 | - |
+| GET | /tasks | List tasks (`?done=`, `?search=`) | no | 200 | - |
+| GET | /tasks/{id} | Get one task | no | 200 | 404 |
+| POST | /tasks | Create a task | no | 201 | 400 |
+| PUT | /tasks/{id} | Update a task | no | 200 | 400, 404 |
+| DELETE | /tasks/{id} | Delete a task | no | 204 | 404 |
+| POST | /auth/signup | Create a new user account | no | 201 | 400 |
+| POST | /auth/login | Authenticate, return a JWT | no | 200 | 400, 401 |
+| POST | /auth/logout | End the user's session | **yes (bearer)** | 204 | 401 |
+| GET | /public/info | Public, open data | no | 200 | - |
+| GET | /protected/profile | Read the logged-in user's profile | **yes (bearer)** | 200 | 401 |
+| GET | /protected/dashboard | Second protected route (proves middleware reuse) | **yes (bearer)** | 200 | 401 |
 
 ## Notes
 
