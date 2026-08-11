@@ -15,3 +15,12 @@ class Task(BaseModel):
     id: int
     title: str
     done: bool
+
+class SignupRequest(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None

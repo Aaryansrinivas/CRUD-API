@@ -10,9 +10,11 @@ from app.service import TaskService, NotFoundError, ValidationError
 from app.memory_repository import InMemoryTaskRepository
 from app.postgres_repository import PostgresTaskRepository
 from app.auth import supabase  
+from app.auth_routes import router as auth_router
 
 
 app = FastAPI()
+app.include_router(auth_router)
 print("Server running and connected to Supabase")
 
 # --- The one line that decides where data lives ---------------------------
