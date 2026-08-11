@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException
-
+from fastapi import APIRouter, HTTPException, Header
+from typing import Optional
 from app.auth import supabase
 from app.models import SignupRequest, LoginRequest
 
@@ -42,3 +42,25 @@ def login(payload: LoginRequest):
         "refresh_token": result.session.refresh_token,
         "token_type": "bearer",
     }
+
+def _extract_token(authorization: Optional[str]) -> str:
+    """Missing, malformed, or empty -> 401. Not verified yet (Stage 3)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Access token required")
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Access token required")
+    return token
+
+
+# ... keep signup() and login() from Stage 1 unchanged, then add:
+
+@router.get("/public/info", summary="Public, open data -- no auth required")
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+
+@router.get("/protected/profile", summary="Read the logged-in user's private profile")
+def profile(authorization: Optional[str] = Header(default=None)):
+    token = _extract_token(authorization)
+    return {"message": "Token received (not yet verified)", "token_preview": token[:12] + "..."}
